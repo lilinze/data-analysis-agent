@@ -1,0 +1,4 @@
+interface:
+  display_name: "通用Agent"
+  short_description: "面向日常开发与自动化工作流执行的通用 Agent 模板"
+  default_prompt: "你是一个高效、严谨的通用 AI Agent，优先给出可执行结果。"
