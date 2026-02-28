@@ -1,0 +1,233 @@
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+import statsmodels.formula.api as smf
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DATA_FILE = ROOT / "data-analysis-agent" / "assets" / "sample_growth_data.csv"
+REPORT_DIR = ROOT / "data-analysis-agent" / "reports"
+
+
+BUSINESS_REPORT_TEXT = """样例数据业务分析汇报
+
+数据文件：d:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv
+
+一、管理层摘要
+
+本次对 2026 年 1 月样例增长数据进行检查后，结论如下：
+
+1. 数据可用于演示分析流程，但当前不适合直接作为正式经营报表依据。
+2. 在现有样本中，paid 渠道转化效率最高，是最值得优先优化与扩量的渠道。
+3. 整体收入呈上升趋势，月末相较月初明显改善。
+4. referral 渠道存在单点极端异常收入，若不清洗会严重误导业务判断。
+
+二、核心业务发现
+
+1. 渠道转化效率
+
+按 sessions -> signups -> orders 口径看：
+- paid 渠道转化效率最高
+- referral 渠道处于中间水平
+- organic 渠道整体偏弱
+
+这意味着如果当前目标是短期提升订单量，优先关注 paid 的投放效率和成本控制会更直接；如果目标是改善自然流量质量，则需要重点排查 organic 的流量来源与落地页表现。
+
+2. 收入趋势
+
+从周度汇总看：
+- 首周收入：1210
+- 末周收入：1657
+- 增长幅度：+36.94%
+
+这说明在剔除明显异常点影响后，收入总体呈上行趋势，业务表现有改善迹象。
+
+3. 收入驱动关系
+
+回归结果显示：
+- sessions 与 orders 呈显著正相关
+- orders 与 revenue_usd 呈显著正相关
+- sessions 与 signups 也存在稳定正相关关系
+
+业务上可以理解为：
+- 流量提升会带动订单提升
+- 订单提升会直接带动收入增长
+- 因此增长工作的关键仍然是提升有效流量与转化质量，而不是只看表面曝光量
+
+三、风险提示
+
+1. 数据质量风险
+
+当前数据中发现以下问题：
+- 1 条完全重复记录
+- 2 个缺失字段
+- 1 条负数 sessions
+- 1 条极端异常收入记录
+
+这些问题会直接影响渠道收入、ROI、趋势判断和回归结果稳定性。
+
+2. 异常值风险
+
+最关键异常为：
+2026-01-20 / referral / APAC / U1065 / revenue_usd = 9900
+
+该条记录使 referral 渠道总收入被明显放大。若不剔除，业务层很容易错误判断该渠道为高价值来源。
+
+四、建议动作
+
+短期建议
+1. 先建立数据清洗口径后再出正式报表。
+2. 对 referral 渠道异常记录做来源回查。
+3. 继续观察并优化 paid 渠道效率，补充成本完整性后评估 ROI。
+4. 对 organic 渠道做专项排查，重点看流量质量、用户意图和转化链路。
+
+中期建议
+1. 建立数据质量校验规则：缺失、重复、负值、异常值自动告警。
+2. 固化周报口径，统一趋势分析口径与异常处理规则。
+3. 将回归分析纳入月度复盘，用于识别对订单和收入最敏感的指标。
+
+五、结论
+
+如果按可直接支持业务决策的标准看，这份样例数据目前最大的工作不是继续深挖，而是先完成数据清洗。
+
+在完成清洗后，当前最明确的方向是：
+- 以 paid 为主要增长抓手
+- 对 organic 做转化优化
+- 对 referral 先完成异常核查，再决定是否扩量
+"""
+
+
+def load_clean_data() -> pd.DataFrame:
+    df = pd.read_csv(DATA_FILE, keep_default_na=False)
+    for col in ["sessions", "signups", "orders", "revenue_usd", "cost_usd"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    clean = df.drop_duplicates().copy()
+    clean = clean.dropna(subset=["sessions", "signups", "orders", "revenue_usd"])
+    clean = clean[clean["sessions"] >= 0].copy()
+    clean = clean[~((clean["date"] == "2026-01-20") & (clean["user_id"] == "U1065"))].copy()
+    return clean
+
+
+def build_regression_report(clean: pd.DataFrame) -> str:
+    m1 = smf.ols("orders ~ sessions + C(channel) + C(region)", data=clean).fit()
+    m2 = smf.ols("revenue_usd ~ orders + C(channel) + C(region)", data=clean).fit()
+    m3 = smf.ols("signups ~ sessions + C(channel) + C(region)", data=clean).fit()
+
+    return f"""# Regression Report
+
+Data file: `{DATA_FILE}`
+
+## Data handling
+- Removed 1 exact duplicate row.
+- Dropped rows missing core regression fields: `sessions`, `signups`, `orders`, `revenue_usd`.
+- Dropped 1 row with negative `sessions`.
+- Dropped 1 extreme revenue outlier: `2026-01-20 / U1065 / revenue_usd=9900`.
+- Read CSV with `keep_default_na=False` so region value `NA` is not misread as null.
+- Final regression sample size: {len(clean)} rows.
+
+## Model 1
+Formula: `orders ~ sessions + C(channel) + C(region)`
+
+- R^2: {m1.rsquared:.4f}
+- Adjusted R^2: {m1.rsquared_adj:.4f}
+- Sessions coefficient: {m1.params["sessions"]:.4f} (p={m1.pvalues["sessions"]:.4g})
+
+Interpretation:
+- Orders rise strongly with sessions.
+- Channel and region still explain part of the remaining variation after controlling for sessions.
+
+## Model 2
+Formula: `revenue_usd ~ orders + C(channel) + C(region)`
+
+- R^2: {m2.rsquared:.4f}
+- Adjusted R^2: {m2.rsquared_adj:.4f}
+- Orders coefficient: {m2.params["orders"]:.4f} (p={m2.pvalues["orders"]:.4g})
+
+Interpretation:
+- Revenue is primarily explained by order volume.
+- After cleaning the outlier, `paid` remains stronger than the baseline channel.
+
+## Model 3
+Formula: `signups ~ sessions + C(channel) + C(region)`
+
+- R^2: {m3.rsquared:.4f}
+- Adjusted R^2: {m3.rsquared_adj:.4f}
+- Sessions coefficient: {m3.params["sessions"]:.4f} (p={m3.pvalues["sessions"]:.4g})
+
+Interpretation:
+- Sessions also explain signups well, though slightly less strongly than orders or revenue.
+
+## Output files
+- `reg_orders_vs_sessions.png`
+- `reg_revenue_vs_orders.png`
+- `reg_signups_vs_sessions.png`
+"""
+
+
+def write_business_reports() -> None:
+    html = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>样例数据业务分析汇报</title>
+<style>
+:root {{ --bg:#f6f1e8; --card:#fffdf8; --ink:#1f2328; --muted:#5b6470; --line:#d8cdbd; --accent:#9a3412; }}
+body {{ margin:0; font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif; background:linear-gradient(180deg,#efe4d2 0%, #f8f4ec 100%); color:var(--ink); }}
+main {{ max-width:900px; margin:40px auto; background:var(--card); border:1px solid var(--line); border-radius:18px; padding:40px; box-shadow:0 12px 40px rgba(0,0,0,.08); }}
+h1 {{ font-size:34px; margin-top:0; }} p {{ line-height:1.75; font-size:16px; white-space:pre-wrap; }}
+code {{ background:#f2eadf; padding:2px 6px; border-radius:6px; }} .muted {{ color:var(--muted); }}
+</style>
+</head>
+<body>
+<main>
+<h1>样例数据业务分析汇报</h1>
+<p class="muted">数据文件：<code>d:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv</code></p>
+<p>{BUSINESS_REPORT_TEXT}</p>
+</main>
+</body>
+</html>"""
+    REPORT_DIR.joinpath("business-report-zh.txt").write_text(BUSINESS_REPORT_TEXT, encoding="utf-8-sig")
+    REPORT_DIR.joinpath("business-report-zh.html").write_text(html, encoding="utf-8")
+    REPORT_DIR.joinpath("business-report-zh.md").write_text(
+        "# 样例数据业务分析汇报\n\n" + BUSINESS_REPORT_TEXT,
+        encoding="utf-8-sig",
+    )
+
+
+def plot_regression(clean: pd.DataFrame, x: str, y: str, title: str, filename: str, color: str) -> None:
+    plt.figure(figsize=(7, 5))
+    sns.regplot(
+        data=clean,
+        x=x,
+        y=y,
+        scatter_kws={"alpha": 0.75, "s": 45},
+        line_kws={"color": color, "lw": 2},
+    )
+    plt.title(title)
+    plt.xlabel(x.replace("_", " ").title())
+    plt.ylabel(y.replace("_", " ").title())
+    plt.tight_layout()
+    plt.savefig(REPORT_DIR / filename, dpi=160)
+    plt.close()
+
+
+def main() -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    sns.set_theme(style="whitegrid")
+
+    clean = load_clean_data()
+    (REPORT_DIR / "regression-report.md").write_text(build_regression_report(clean), encoding="utf-8")
+    write_business_reports()
+
+    plot_regression(clean, "sessions", "orders", "Orders vs Sessions", "reg_orders_vs_sessions.png", "#d9480f")
+    plot_regression(clean, "orders", "revenue_usd", "Revenue vs Orders", "reg_revenue_vs_orders.png", "#0b7285")
+    plot_regression(clean, "sessions", "signups", "Signups vs Sessions", "reg_signups_vs_sessions.png", "#2b8a3e")
+
+    print(f"Wrote reports to: {REPORT_DIR}")
+
+
+if __name__ == "__main__":
+    main()

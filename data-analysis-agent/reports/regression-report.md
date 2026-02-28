@@ -1,6 +1,6 @@
 # Regression Report
 
-Data file: `d:\project\cursor\data-analysis-agent\assets\sample_growth_data.csv`
+Data file: `D:\project\cursor\data-analysis-agent\assets\sample_growth_data.csv`
 
 ## Data handling
 - Removed 1 exact duplicate row.
