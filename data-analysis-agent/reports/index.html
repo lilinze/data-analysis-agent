@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Data Analysis Agent Reports</title>
+  <title>数据分析 Agent 报告展示页</title>
   <style>
     :root {
       --bg: #f4efe6;
@@ -18,7 +18,7 @@
     body {
       margin: 0;
       color: var(--ink);
-      font-family: Georgia, "Times New Roman", serif;
+      font-family: "Microsoft YaHei", Georgia, serif;
       background:
         radial-gradient(circle at top left, #efe3cf 0, transparent 28%),
         radial-gradient(circle at bottom right, #e7d9c1 0, transparent 24%),
@@ -124,42 +124,51 @@
   <div class="wrap">
     <section class="hero">
       <p class="eyebrow">Data Analysis Agent</p>
-      <h1>Report Showcase</h1>
+      <h1>报告展示页</h1>
       <p class="sub">
-        This page collects the sample outputs generated from the demo growth dataset:
-        data quality review, regression analysis, business narrative, and chart assets.
+        这个页面聚合了样例数据的关键输出，包括数据质量检查、回归分析图、业务汇报以及可复用的生成入口。
       </p>
       <div class="grid">
         <div class="card">
           <p class="metric">67</p>
-          <div class="label">Raw rows in sample dataset</div>
+          <div class="label">原始数据行数</div>
         </div>
         <div class="card">
           <p class="metric">63</p>
-          <div class="label">Rows used in cleaned regression sample</div>
+          <div class="label">清洗后回归样本数</div>
         </div>
         <div class="card">
           <p class="metric">36.94%</p>
-          <div class="label">Last-week revenue lift vs first week</div>
+          <div class="label">末周收入相较首周提升</div>
         </div>
         <div class="card">
           <p class="metric">1</p>
-          <div class="label">Extreme outlier isolated for review</div>
+          <div class="label">识别出的极端异常收入点</div>
         </div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Reports</h2>
-      <div class="links">
-        <a href="./regression-report.md">Regression Report</a>
-        <a href="./business-report-zh.html">Chinese Business Report</a>
-        <a href="./business-report-zh.txt">Chinese Business Report TXT</a>
-      </div>
+      <h2>业务摘要</h2>
+      <ul>
+        <li>`paid` 渠道转化效率最高，是当前最直接的增长抓手。</li>
+        <li>`organic` 偏弱，更适合做流量质量和落地页转化排查。</li>
+        <li>`referral` 收入被单条异常值放大，必须先清洗再做渠道判断。</li>
+      </ul>
     </section>
 
     <section class="section">
-      <h2>Regression Charts</h2>
+      <h2>报告入口</h2>
+      <div class="links">
+        <a href="./regression-report.md">回归报告</a>
+        <a href="./business-report-zh.html">中文业务汇报</a>
+        <a href="./business-report-zh.txt">中文业务汇报 TXT</a>
+      </div>
+      <p>当前数据文件：<code>D:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv</code></p>
+    </section>
+
+    <section class="section">
+      <h2>回归图表</h2>
       <div class="charts">
         <figure>
           <img src="./reg_orders_vs_sessions.png" alt="Orders vs Sessions chart">
@@ -174,11 +183,11 @@
     </section>
 
     <section class="section">
-      <h2>How To Rebuild</h2>
+      <h2>一键重建</h2>
       <ul>
-        <li>Run <code>python data-analysis-agent/scripts/generate_reports.py</code> from the repo root.</li>
-        <li>The generator reads <code>data-analysis-agent/assets/sample_growth_data.csv</code>.</li>
-        <li>The generator refreshes all files in <code>data-analysis-agent/reports/</code>.</li>
+        <li>默认运行：<code>python data-analysis-agent/scripts/generate_reports.py</code></li>
+        <li>自定义输入：<code>python data-analysis-agent/scripts/generate_reports.py --input your.csv</code></li>
+        <li>自定义输出：<code>python data-analysis-agent/scripts/generate_reports.py --output-dir custom-reports</code></li>
       </ul>
     </section>
   </div>

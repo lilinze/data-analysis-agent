@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -7,13 +8,13 @@ import statsmodels.formula.api as smf
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_FILE = ROOT / "data-analysis-agent" / "assets" / "sample_growth_data.csv"
-REPORT_DIR = ROOT / "data-analysis-agent" / "reports"
+DEFAULT_DATA_FILE = ROOT / "data-analysis-agent" / "assets" / "sample_growth_data.csv"
+DEFAULT_REPORT_DIR = ROOT / "data-analysis-agent" / "reports"
 
 
 BUSINESS_REPORT_TEXT = """样例数据业务分析汇报
 
-数据文件：d:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv
+数据文件：{data_file}
 
 一、管理层摘要
 
@@ -99,8 +100,25 @@ BUSINESS_REPORT_TEXT = """样例数据业务分析汇报
 """
 
 
-def load_clean_data() -> pd.DataFrame:
-    df = pd.read_csv(DATA_FILE, keep_default_na=False)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate demo data analysis reports.")
+    parser.add_argument(
+        "--input",
+        dest="input_file",
+        default=str(DEFAULT_DATA_FILE),
+        help="Path to input CSV file.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default=str(DEFAULT_REPORT_DIR),
+        help="Directory to write generated reports into.",
+    )
+    return parser.parse_args()
+
+
+def load_clean_data(data_file: Path) -> pd.DataFrame:
+    df = pd.read_csv(data_file, keep_default_na=False)
     for col in ["sessions", "signups", "orders", "revenue_usd", "cost_usd"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     clean = df.drop_duplicates().copy()
@@ -110,14 +128,14 @@ def load_clean_data() -> pd.DataFrame:
     return clean
 
 
-def build_regression_report(clean: pd.DataFrame) -> str:
+def build_regression_report(clean: pd.DataFrame, data_file: Path) -> str:
     m1 = smf.ols("orders ~ sessions + C(channel) + C(region)", data=clean).fit()
     m2 = smf.ols("revenue_usd ~ orders + C(channel) + C(region)", data=clean).fit()
     m3 = smf.ols("signups ~ sessions + C(channel) + C(region)", data=clean).fit()
 
     return f"""# Regression Report
 
-Data file: `{DATA_FILE}`
+Data file: `{data_file}`
 
 ## Data handling
 - Removed 1 exact duplicate row.
@@ -166,7 +184,8 @@ Interpretation:
 """
 
 
-def write_business_reports() -> None:
+def write_business_reports(report_dir: Path, data_file: Path) -> None:
+    business_report_text = BUSINESS_REPORT_TEXT.format(data_file=data_file.as_posix())
     html = f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -184,20 +203,28 @@ code {{ background:#f2eadf; padding:2px 6px; border-radius:6px; }} .muted {{ col
 <body>
 <main>
 <h1>样例数据业务分析汇报</h1>
-<p class="muted">数据文件：<code>d:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv</code></p>
-<p>{BUSINESS_REPORT_TEXT}</p>
+<p class="muted">数据文件：<code>{data_file.as_posix()}</code></p>
+<p>{business_report_text}</p>
 </main>
 </body>
 </html>"""
-    REPORT_DIR.joinpath("business-report-zh.txt").write_text(BUSINESS_REPORT_TEXT, encoding="utf-8-sig")
-    REPORT_DIR.joinpath("business-report-zh.html").write_text(html, encoding="utf-8")
-    REPORT_DIR.joinpath("business-report-zh.md").write_text(
-        "# 样例数据业务分析汇报\n\n" + BUSINESS_REPORT_TEXT,
+    report_dir.joinpath("business-report-zh.txt").write_text(business_report_text, encoding="utf-8-sig")
+    report_dir.joinpath("business-report-zh.html").write_text(html, encoding="utf-8")
+    report_dir.joinpath("business-report-zh.md").write_text(
+        "# 样例数据业务分析汇报\n\n" + business_report_text,
         encoding="utf-8-sig",
     )
 
 
-def plot_regression(clean: pd.DataFrame, x: str, y: str, title: str, filename: str, color: str) -> None:
+def plot_regression(
+    clean: pd.DataFrame,
+    report_dir: Path,
+    x: str,
+    y: str,
+    title: str,
+    filename: str,
+    color: str,
+) -> None:
     plt.figure(figsize=(7, 5))
     sns.regplot(
         data=clean,
@@ -210,23 +237,227 @@ def plot_regression(clean: pd.DataFrame, x: str, y: str, title: str, filename: s
     plt.xlabel(x.replace("_", " ").title())
     plt.ylabel(y.replace("_", " ").title())
     plt.tight_layout()
-    plt.savefig(REPORT_DIR / filename, dpi=160)
+    plt.savefig(report_dir / filename, dpi=160)
     plt.close()
 
 
+def write_showcase_page(report_dir: Path, data_file: Path, raw_rows: int, clean_rows: int) -> None:
+    html = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>数据分析 Agent 报告展示页</title>
+  <style>
+    :root {{
+      --bg: #f4efe6;
+      --card: #fffaf2;
+      --ink: #1e2329;
+      --muted: #5f6b76;
+      --line: #d8c9b7;
+      --accent: #a4491d;
+      --accent-2: #155e75;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: var(--ink);
+      font-family: "Microsoft YaHei", Georgia, serif;
+      background:
+        radial-gradient(circle at top left, #efe3cf 0, transparent 28%),
+        radial-gradient(circle at bottom right, #e7d9c1 0, transparent 24%),
+        linear-gradient(180deg, #f0e7da 0%, var(--bg) 100%);
+    }}
+    .wrap {{
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }}
+    .hero {{
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: linear-gradient(135deg, #fffaf2 0%, #f7f0e4 100%);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+    }}
+    .eyebrow {{
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-size: 12px;
+      margin: 0 0 10px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: clamp(36px, 6vw, 68px);
+      line-height: 0.95;
+    }}
+    .sub {{
+      max-width: 760px;
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.6;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }}
+    .card {{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }}
+    .metric {{
+      font-size: 34px;
+      color: var(--accent-2);
+      margin: 0;
+    }}
+    .label {{
+      margin-top: 6px;
+      color: var(--muted);
+    }}
+    .section {{
+      margin-top: 28px;
+      padding: 22px;
+      border-radius: 20px;
+      background: rgba(255, 250, 242, 0.82);
+      border: 1px solid var(--line);
+    }}
+    h2 {{
+      margin: 0 0 14px;
+      font-size: 24px;
+    }}
+    .links a {{
+      display: inline-block;
+      margin: 6px 12px 6px 0;
+      color: var(--accent-2);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+    }}
+    .links a:hover {{ border-color: var(--accent-2); }}
+    .charts {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }}
+    .charts img {{
+      width: 100%;
+      display: block;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: white;
+    }}
+    ul {{
+      margin: 0;
+      padding-left: 20px;
+      line-height: 1.7;
+    }}
+    code {{
+      background: #efe5d6;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Data Analysis Agent</p>
+      <h1>报告展示页</h1>
+      <p class="sub">
+        这个页面聚合了样例数据的关键输出，包括数据质量检查、回归分析图、业务汇报以及可复用的生成入口。
+      </p>
+      <div class="grid">
+        <div class="card">
+          <p class="metric">{raw_rows}</p>
+          <div class="label">原始数据行数</div>
+        </div>
+        <div class="card">
+          <p class="metric">{clean_rows}</p>
+          <div class="label">清洗后回归样本数</div>
+        </div>
+        <div class="card">
+          <p class="metric">36.94%</p>
+          <div class="label">末周收入相较首周提升</div>
+        </div>
+        <div class="card">
+          <p class="metric">1</p>
+          <div class="label">识别出的极端异常收入点</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>业务摘要</h2>
+      <ul>
+        <li>`paid` 渠道转化效率最高，是当前最直接的增长抓手。</li>
+        <li>`organic` 偏弱，更适合做流量质量和落地页转化排查。</li>
+        <li>`referral` 收入被单条异常值放大，必须先清洗再做渠道判断。</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>报告入口</h2>
+      <div class="links">
+        <a href="./regression-report.md">回归报告</a>
+        <a href="./business-report-zh.html">中文业务汇报</a>
+        <a href="./business-report-zh.txt">中文业务汇报 TXT</a>
+      </div>
+      <p>当前数据文件：<code>{data_file.as_posix()}</code></p>
+    </section>
+
+    <section class="section">
+      <h2>回归图表</h2>
+      <div class="charts">
+        <figure>
+          <img src="./reg_orders_vs_sessions.png" alt="Orders vs Sessions chart">
+        </figure>
+        <figure>
+          <img src="./reg_revenue_vs_orders.png" alt="Revenue vs Orders chart">
+        </figure>
+        <figure>
+          <img src="./reg_signups_vs_sessions.png" alt="Signups vs Sessions chart">
+        </figure>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一键重建</h2>
+      <ul>
+        <li>默认运行：<code>python data-analysis-agent/scripts/generate_reports.py</code></li>
+        <li>自定义输入：<code>python data-analysis-agent/scripts/generate_reports.py --input your.csv</code></li>
+        <li>自定义输出：<code>python data-analysis-agent/scripts/generate_reports.py --output-dir custom-reports</code></li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>"""
+    report_dir.joinpath("index.html").write_text(html, encoding="utf-8")
+
+
 def main() -> None:
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    args = parse_args()
+    data_file = Path(args.input_file).resolve()
+    report_dir = Path(args.output_dir).resolve()
+    report_dir.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
-    clean = load_clean_data()
-    (REPORT_DIR / "regression-report.md").write_text(build_regression_report(clean), encoding="utf-8")
-    write_business_reports()
+    raw = pd.read_csv(data_file, keep_default_na=False)
+    clean = load_clean_data(data_file)
+    (report_dir / "regression-report.md").write_text(build_regression_report(clean, data_file), encoding="utf-8")
+    write_business_reports(report_dir, data_file)
+    write_showcase_page(report_dir, data_file, len(raw), len(clean))
 
-    plot_regression(clean, "sessions", "orders", "Orders vs Sessions", "reg_orders_vs_sessions.png", "#d9480f")
-    plot_regression(clean, "orders", "revenue_usd", "Revenue vs Orders", "reg_revenue_vs_orders.png", "#0b7285")
-    plot_regression(clean, "sessions", "signups", "Signups vs Sessions", "reg_signups_vs_sessions.png", "#2b8a3e")
+    plot_regression(clean, report_dir, "sessions", "orders", "Orders vs Sessions", "reg_orders_vs_sessions.png", "#d9480f")
+    plot_regression(clean, report_dir, "orders", "revenue_usd", "Revenue vs Orders", "reg_revenue_vs_orders.png", "#0b7285")
+    plot_regression(clean, report_dir, "sessions", "signups", "Signups vs Sessions", "reg_signups_vs_sessions.png", "#2b8a3e")
 
-    print(f"Wrote reports to: {REPORT_DIR}")
+    print(f"Wrote reports to: {report_dir}")
 
 
 if __name__ == "__main__":

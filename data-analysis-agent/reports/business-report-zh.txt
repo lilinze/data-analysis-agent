@@ -1,6 +1,6 @@
 ﻿样例数据业务分析汇报
 
-数据文件：d:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv
+数据文件：D:/project/cursor/data-analysis-agent/assets/sample_growth_data.csv
 
 一、管理层摘要
 
